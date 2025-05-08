@@ -1373,9 +1373,9 @@ class simulation_base(Node):
         # Obtain tension vector
         quad_force_vector = F * wRb @ e3
         quad_centrifugal_f = mQ * l * (xi_omega.T @ xi_omega)
-        tension_vector = mL * (-xi.T.reshape(1,3) @ quad_force_vector + quad_centrifugal_f) * xi.reshape(3,1) / total_mass
+        tension_vector = mL * (-xi.T.reshape(1,3) @ quad_force_vector + xi.T.reshape(1,3) @ self.ext_force*mQ + quad_centrifugal_f) * xi.reshape(3,1) / total_mass
         # Solving for Load Acceleration
-        accL = - tension_vector / mL - g
+        accL = - tension_vector / mL - g + (self.ext_force/self.pl_params.mass).reshape(3,1)        
         # Solving for Quadrotor Acceleration
         accQ = (quad_force_vector + tension_vector) / mQ - g
   
@@ -1629,7 +1629,8 @@ class simulation_base(Node):
     ##################                  Call backs                  ####################
     
     def ext_wrench_callback(self, wrench_command):
-        self.get_logger().info(wrench_command.force.x)
+        # self.get_logger().info(wrench_command.force.x)
+        self.get_logger().info(f"Wrench force x: {wrench_command.force.x}")
         #print(wrench_command.force.x)
         self.ext_force = np.array([wrench_command.force.x, wrench_command.force.y, wrench_command.force.z])
         self.ext_torque= np.array([wrench_command.torque.x, wrench_command.torque.y, wrench_command.torque.z])

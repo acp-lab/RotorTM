@@ -81,35 +81,16 @@ $ pip install numpy==2.1.3
 $ pip install scipy==1.14.1
 $ pip install cvxopt==1.2.7
 ```
-Additionally, it uses an embedded control library Acados, please install it from the below link and create a virtual python environment as mentioned in Acados Documentation.
-
-https://docs.acados.org/installation/index.html
-https://docs.acados.org/python_interface/index.html
-
-
-After installation of necessary packages, clone the repo, run the acados controller setup and `colcon build` the ROS workspace. Source the `setup.bash` file inside the main workspace folder.
+Clone the repo and `colcon build` the ROS workspace. Source the `setup.bash` file inside the main workspace folder.
 
 ```bash
 $ cd /path/to/your/workspace/src
 $ git clone --branch Python/ROS https://github.com/arplaboratory/RotorTM.git
-$ cd ..
-$ colcon build --packages-select rotor_tm_config 
-$ colcon build --packages-select rotor_tm_utils
-$ source install/setup.bash 
-$ cd src/RotorTM/rotor_tm_plcontrol
-$ gedit build.sh
-```
-
-Update your Acados's virtual python environmrnt source file path. 
-Example - source ~/acados/mpcenv/bin/activate
-
-``` bash
-$ source build.sh
-Ensure you are inside main worspace again and run
+$ cd RotorTM
 $ colcon build
-$ source ~/path/to/your/workspace/install/setup.bash
-```
+$ source install/setup.bash 
 
+```
 
 ##  Running
 <!-- ### Switching Off Hybrid Dynamics
@@ -187,8 +168,8 @@ This is helpful when testing controllers other than what's provided.
 ### External Wrench on Payload
 A module named 'keyboard2wrench' is added. Launching this module allows user to apply external wrench on the payload with keyboard. Use the following commands to start this module.
 ```bash
-$ chmod +x ~/workspace/src/rotorTM/keyboard2wrench/keyboard2wrench.py
-$ ros2 run keyboard2wrench keyboard2wrench.py
+$ chmod +x ~/workspace/src/rotorTM/rotor_tm_keyboard2wrench/rotor_tm_keyboard2wrench/keyboard2wrench.py
+$ ros2 run rotor_tm_keyboard2wrench keyboard_input
 ```
 To apply a wrench, use the following key:
 ```
