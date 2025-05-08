@@ -10,7 +10,7 @@ from rotor_tm_control.controller import controller
 
 from std_msgs.msg import Bool 
 from nav_msgs.msg import Odometry 
-from rotor_tm_msgs.msg import PositionCommand,RPMCommand,FMCommand
+from rotor_tm_msgs.msg import PositionCommand,RPMCommand,FMCommand, FMNCommand, TrajCommand
 from rotor_tm_msgs.msg import CenPLCommand
 from geometry_msgs.msg import Vector3, Wrench
 
@@ -18,7 +18,8 @@ from rotor_tm_utils import read_params
 from rotor_tm_utils import utilslib 
 from rotor_tm_utils.vec2asym import vec2asym
 import ipdb
-import re
+
+
 
 
 
@@ -31,6 +32,7 @@ def extract_number(uav_name):
 class controller_node(Node):
 
     def __init__(self, node_id, single_node, payload_params_path, uav_params_path, mechanism_params_path, payload_control_gain_path, uav_control_gain_path):
+        self.temp_count = 0 # must be removed, for debugging
         self.clock = Clock()
         self.node_id = node_id
         self.single_node = single_node
@@ -82,6 +84,7 @@ class controller_node(Node):
             # Initialize ROS2 Subscribers
             self.create_subscription(PositionCommand, '/payload/des_traj', self.desired_traj_callback, qos_profile)
             self.create_subscription(Odometry, '/payload/odom', self.pl_odom_callback, qos_profile)
+            self.create_subscription(FMNCommand , "/payload/pl_nmpc_FMN_cmd", self.desired_fmn_callback, qos_profile)
 
             for uav_id in range(self.pl_params.nquad):
                 mav_odom = mav_name + str(uav_id+1) + '/odom'
@@ -95,7 +98,6 @@ class controller_node(Node):
                 FM_message_name = mav_name + str(i+1) + "/fm_cmd"
                 FM_prefix = "controller_"+str(i+1)+"/"
                 self.FM_pub.append(self.create_publisher(FMCommand, FM_prefix + FM_message_name, 10))
-
             
         else:
             # Currently controllers are launch multiple times, (each uav uses its own controller)
@@ -122,6 +124,8 @@ class controller_node(Node):
             # depth=1)  # Equivalent to queue_size=1)
 
             self.create_subscription(PositionCommand, '/payload/des_traj', self.desired_traj_callback, qos_profile)
+            self.create_subscription(TrajCommand, '/payload/des_traj_n', self.desired_traj_n_callback, qos_profile)
+            self.create_subscription(FMNCommand , "/payload/pl_nmpc_FMN_cmd", self.desired_fmn_callback, qos_profile)
             self.create_subscription(Odometry, '/payload/odom',  self.pl_odom_callback, qos_profile)
             #ipdb.set_trace()
             uav_name = self.pl_params.uav_in_team[node_id]
@@ -241,8 +245,7 @@ class controller_node(Node):
         self.qd[uav_id]["xixiT"] = xi @ xi.T
         self.qd[uav_id]["xidot"] = qd_xidot.reshape((3,1))
         self.qd[uav_id]["yaw_des"] = 0
-        self.qd[uav_id]["yawdot_des"] = 0
-        
+        self.qd[uav_id]["yawdot_des"] = 0       
 
     def pl_odom_callback(self, payload_odom):
         # DESCRIPTION:
@@ -253,6 +256,7 @@ class controller_node(Node):
 
         # OUTPUTS:
         # self.pl       - update self.pl with current Odometry of the payload
+        # print("I am here....")
         self.pl["pos"] = np.array([     [payload_odom.pose.pose.position.x],
                                         [payload_odom.pose.pose.position.y],
                                         [payload_odom.pose.pose.position.z]])
@@ -300,9 +304,84 @@ class controller_node(Node):
                                          [des_traj.angular_velocity.y],
                                          [des_traj.angular_velocity.z]])
         self.pl["yaw_des"] = 0.0
-        self.pl["yawdot_des"] = 0.0
+        self.pl["yawdot_des"] = 0.0          
         self.sim_subscriber()
     
+    def desired_traj_n_callback(self, des_traj_n):
+        # print("printing n points traj")
+        # #print(des_traj_n.points[0])
+        # print(len(des_traj_n.points))
+        # for i in range(len(des_traj_n.points)):
+        #     point = des_traj_n.points[i]
+        #     print("point")
+        #     print(point.position.x)
+        #     print(point.position.y)
+        #     print(point.position.z)
+        point = des_traj_n.points[0]
+
+        self.pl["pos_des"] = np.array([ [point.position.x],
+                                        [point.position.y],
+                                        [point.position.z]])
+        self.pl["vel_des"] = np.array([ [point.velocity.x],
+                                        [point.velocity.y],
+                                        [point.velocity.z]])
+        self.pl["acc_des"] = np.array([ [point.acceleration.x],
+                                        [point.acceleration.y],
+                                        [point.acceleration.z]])     
+        self.pl["jrk_des"] = np.array([ [point.jerk.x],
+                                        [point.jerk.y],
+                                        [point.jerk.z]])                     
+        self.pl["quat_des"] = np.array([[point.quaternion.w],
+                                        [point.quaternion.x],
+                                        [point.quaternion.y],
+                                        [point.quaternion.z]])
+        self.pl["omega_des"] = np.array([[point.angular_velocity.x],
+                                         [point.angular_velocity.y],
+                                         [point.angular_velocity.z]])
+        self.pl["yaw_des"] = 0.0
+        self.pl["yawdot_des"] = 0.0  
+
+
+        # if len(des_traj_n.points)== 1:
+        #     point = des_traj_n.points[0]
+        #     print("got last point")
+        #     acc = np.array([ [point.acceleration.x],
+        #                                 [point.acceleration.y],
+        #                                 [point.acceleration.z]])
+        #     print("acc ", acc)
+
+    def desired_fmn_callback(self,fmn_msg):
+        Force=  np.array([fmn_msg.rlink_thrust.x, fmn_msg.rlink_thrust.y, fmn_msg.rlink_thrust.z])
+        Moment = np.array([fmn_msg.moments.x, fmn_msg.moments.y, fmn_msg.moments.z])
+        Null_space_vec = np.array([fmn_msg.null_space_vec.x, fmn_msg.null_space_vec.y, fmn_msg.null_space_vec.z])
+        mu, att_acc, F_list, M_list, quat_list, rot_list = self.controller.cooperative_suspended_payload_nmpc_controller(self.pl, self.qd, self.pl_params, self.quad_params, self.node_id, Force, Moment, Null_space_vec)
+        
+        cen_pl_command = CenPLCommand()
+        cen_pl_command.header.stamp = self.clock.now().to_msg()
+        cen_pl_command.header.frame_id = "simulator" 
+        cen_pl_command.copr_status = 3
+        for i in range(self.pl_params.nquad):
+            acc_command = Vector3()
+            acc_command.x = att_acc[0,i]
+            acc_command.y = att_acc[1,i]
+            acc_command.z = att_acc[2,i]
+            mu_command = Vector3()
+            mu_command.x = mu[3*i]
+            mu_command.y = mu[3*i+1]
+            mu_command.z = mu[3*i+2]
+            cen_pl_command.acc.append(acc_command)
+            cen_pl_command.mu.append(mu_command)
+            cen_pl_command.estimated_acc.append(acc_command)
+
+        cen_pl_command.pos_cmd.quaternion.x = self.pl["quat"][1,0]
+        cen_pl_command.pos_cmd.quaternion.y = self.pl["quat"][2,0]
+        cen_pl_command.pos_cmd.quaternion.z = self.pl["quat"][3,0]
+        cen_pl_command.pos_cmd.quaternion.w = self.pl["quat"][0,0]
+        self.cen_pl_cmd_pub.publish(cen_pl_command)
+        FM_message = self.assembly_FM_message(F_list, M_list, self.node_id)
+        self.FM_pub[0].publish(FM_message)
+
+
     def controller_setup(self, pl_params):
         # DESCRIPTION:
         # Prepares input for cooperative cable suspended payload scenario controller
@@ -471,34 +550,35 @@ class controller_node(Node):
             F_list, M_list = self.controller.rigid_links_cooperative_payload_controller(ql, self.pl_params)
         elif self.pl_params.mechanism_type == 'Cable':
             if self.pl_params.payload_type == 'Rigid Body':
-                mu, att_acc, F_list, M_list, quat_list, rot_list = self.controller.cooperative_suspended_payload_controller(self.pl, self.qd, self.pl_params, self.quad_params, self.node_id)
-                cen_pl_command = CenPLCommand()
-                cen_pl_command.header.stamp = self.clock.now().to_msg()
-                cen_pl_command.header.frame_id = "simulator" 
-                cen_pl_command.copr_status = 3
-                for i in range(self.pl_params.nquad):
-                    acc_command = Vector3()
-                    acc_command.x = att_acc[0,i]
-                    acc_command.y = att_acc[1,i]
-                    acc_command.z = att_acc[2,i]
+                pass
+            #     mu, att_acc, F_list, M_list, quat_list, rot_list = self.controller.cooperative_suspended_payload_controller(self.pl, self.qd, self.pl_params, self.quad_params, self.node_id)
+            #     cen_pl_command = CenPLCommand()
+            #     cen_pl_command.header.stamp = self.clock.now().to_msg()
+            #     cen_pl_command.header.frame_id = "simulator" 
+            #     cen_pl_command.copr_status = 3
+            #     for i in range(self.pl_params.nquad):
+            #         acc_command = Vector3()
+            #         acc_command.x = att_acc[0,i]
+            #         acc_command.y = att_acc[1,i]
+            #         acc_command.z = att_acc[2,i]
 
-                    mu_command = Vector3()
-                    mu_command.x = mu[3*i,0]
-                    mu_command.y = mu[3*i+1,0]
-                    mu_command.z = mu[3*i+2,0]
+            #         mu_command = Vector3()
+            #         mu_command.x = mu[3*i,0]
+            #         mu_command.y = mu[3*i+1,0]
+            #         mu_command.z = mu[3*i+2,0]
 
-                    cen_pl_command.acc.append(acc_command)
-                    cen_pl_command.mu.append(mu_command)
-                    cen_pl_command.estimated_acc.append(acc_command)
+            #         cen_pl_command.acc.append(acc_command)
+            #         cen_pl_command.mu.append(mu_command)
+            #         cen_pl_command.estimated_acc.append(acc_command)
 
-                cen_pl_command.pos_cmd.quaternion.x = self.pl["quat"][1,0]
-                cen_pl_command.pos_cmd.quaternion.y = self.pl["quat"][2,0]
-                cen_pl_command.pos_cmd.quaternion.z = self.pl["quat"][3,0]
-                cen_pl_command.pos_cmd.quaternion.w = self.pl["quat"][0,0]
-                self.cen_pl_cmd_pub.publish(cen_pl_command)
-            elif self.pl_params.payload_type == 'Point Mass':
-                plqd = self.assembly_plqd()
-                F_list, M_list = self.controller.single_payload_geometric_controller(ql = plqd, pl_params = self.pl_params, qd_params = self.quad_params)
+            #     cen_pl_command.pos_cmd.quaternion.x = self.pl["quat"][1,0]
+            #     cen_pl_command.pos_cmd.quaternion.y = self.pl["quat"][2,0]
+            #     cen_pl_command.pos_cmd.quaternion.z = self.pl["quat"][3,0]
+            #     cen_pl_command.pos_cmd.quaternion.w = self.pl["quat"][0,0]
+            #     self.cen_pl_cmd_pub.publish(cen_pl_command)
+            # elif self.pl_params.payload_type == 'Point Mass':
+            #     plqd = self.assembly_plqd()
+            #     F_list, M_list = self.controller.single_payload_geometric_controller(ql = plqd, pl_params = self.pl_params, qd_params = self.quad_params)
         
         if self.single_node:
             print("The self.single_node is ", self.single_node)
@@ -519,21 +599,6 @@ def main():
     uav_control_gain_path = sys.argv[7]
     single_node = sys.argv[2]    
     nr = sys.argv[1]
-    # print("$$$$$$$$$$$$$$$$$$$$$")
-    # print(nr)
-
-    # #**Case 1
-    # payload_params_path = "/home/swati/Quad_DR/ros2_ws/src/rotor_tm_config/config/load_params/pointmass_payload.yaml"
-    # uav_params_path = "/home/swati/Quad_DR/ros2_ws/src/rotor_tm_config/config/uav_params/"
-    # mechanism_params_path = "/home/swati/Quad_DR/ros2_ws/src/rotor_tm_config/config/attach_mechanism/cable/1_robot_point_mass_0-5m.yaml"
-    # payload_control_gain_path = "/home/swati/Quad_DR/ros2_ws/src/rotor_tm_config/config/control_params/pointmass_cable_gains.yaml"
-    # uav_control_gain_path = "/home/swati/Quad_DR/ros2_ws/src/rotor_tm_config/config/control_params/"
-    # single_node = 0
-    # nr = 0
-
-    #node_name = 'controller_'+str(int(sys.argv[1])+1)
-    #node_name = 'controller_1'
-    #print(node_name)
     rclpy.init()
     
 

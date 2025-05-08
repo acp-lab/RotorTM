@@ -187,7 +187,7 @@ class simulation_base(Node):
         self.robot_command_subscriber = []
         uav_type = []
         uav_in_team = []
-        print(pl_params.uav_in_team)
+        
         for i in range(self.nquad):
             uav_name = self.uav_params[i].uav_name
             uav_name_with_id = pl_params.uav_in_team[i]
@@ -453,7 +453,7 @@ class simulation_base(Node):
             payload_odom.twist.twist.angular.z   = self.x[12] + white_noise[11]
 
             self.payload_odom_publisher.publish(payload_odom)
-
+            
             payload_odom.pose.pose.position.x = load_pos[0]
             payload_odom.pose.pose.position.y = load_pos[1]
             payload_odom.pose.pose.position.z = load_pos[2]
@@ -590,24 +590,26 @@ class simulation_base(Node):
             else:
                 load_pos = self.x[0:3].reshape((3,1)) 
             load_pos = load_pos.flatten()
-            white_noise = np.random.multivariate_normal(np.zeros(12),self.white_noise_cov)
-            deltaR = utilslib.expSO3(white_noise[6:9])
-            payload_rot_with_noise = np.matmul(rot_math.from_quat([self.x[7],self.x[8],self.x[9],self.x[6]]).as_matrix(), deltaR)
-            payload_quat_with_noise = rot_math.from_matrix(payload_rot_with_noise).as_quat()
-            payload_odom.pose.pose.position.x = load_pos[0] + white_noise[0]
-            payload_odom.pose.pose.position.y = load_pos[1] + white_noise[1]
-            payload_odom.pose.pose.position.z = load_pos[2] + white_noise[2]
-            payload_odom.twist.twist.linear.x    = self.x[3] + white_noise[3]
-            payload_odom.twist.twist.linear.y    = self.x[4] + white_noise[4]
-            payload_odom.twist.twist.linear.z    = self.x[5] + white_noise[5]
-            payload_odom.pose.pose.orientation.w = payload_quat_with_noise[3] 
-            payload_odom.pose.pose.orientation.x = payload_quat_with_noise[0]
-            payload_odom.pose.pose.orientation.y = payload_quat_with_noise[1]
-            payload_odom.pose.pose.orientation.z = payload_quat_with_noise[2]
-            payload_odom.twist.twist.angular.x   = self.x[10] + white_noise[9]
-            payload_odom.twist.twist.angular.y   = self.x[11] + white_noise[10]
-            payload_odom.twist.twist.angular.z   = self.x[12] + white_noise[11]
-            self.payload_odom_publisher.publish(payload_odom)
+            
+            # white_noise = np.random.multivariate_normal(np.zeros(12),self.white_noise_cov)
+            # deltaR = utilslib.expSO3(white_noise[6:9])
+            # payload_rot_with_noise = np.matmul(rot_math.from_quat([self.x[7],self.x[8],self.x[9],self.x[6]]).as_matrix(), deltaR)
+            # payload_quat_with_noise = rot_math.from_matrix(payload_rot_with_noise).as_quat()
+            # payload_odom.pose.pose.position.x = load_pos[0] + white_noise[0]
+            # payload_odom.pose.pose.position.y = load_pos[1] + white_noise[1]
+            # payload_odom.pose.pose.position.z = load_pos[2] + white_noise[2]
+            # payload_odom.twist.twist.linear.x    = self.x[3] + white_noise[3]
+            # payload_odom.twist.twist.linear.y    = self.x[4] + white_noise[4]
+            # payload_odom.twist.twist.linear.z    = self.x[5] + white_noise[5]
+            # payload_odom.pose.pose.orientation.w = payload_quat_with_noise[3] 
+            # payload_odom.pose.pose.orientation.x = payload_quat_with_noise[0]
+            # payload_odom.pose.pose.orientation.y = payload_quat_with_noise[1]
+            # payload_odom.pose.pose.orientation.z = payload_quat_with_noise[2]
+            # payload_odom.twist.twist.angular.x   = self.x[10] + white_noise[9]
+            # payload_odom.twist.twist.angular.y   = self.x[11] + white_noise[10]
+            # payload_odom.twist.twist.angular.z   = self.x[12] + white_noise[11]
+            # self.payload_odom_publisher.publish(payload_odom)
+
             payload_odom.pose.pose.position.x = load_pos[0]
             payload_odom.pose.pose.position.y = load_pos[1]
             payload_odom.pose.pose.position.z = load_pos[2]
@@ -621,22 +623,24 @@ class simulation_base(Node):
             payload_odom.twist.twist.angular.x   = self.x[10]
             payload_odom.twist.twist.angular.y   = self.x[11]
             payload_odom.twist.twist.angular.z   = self.x[12]
-            self.payload_odom_ground_truth_publisher.publish(payload_odom)
+            #self.payload_odom_ground_truth_publisher.publish(payload_odom)
             self.payload_odom_publisher.publish(payload_odom)
-            self.robot_vio_publisher.publish(payload_vio)
+            #self.robot_vio_publisher.publish(payload_vio)
             # self.payload_ctrl_wrench.publish(self.wrench_value)
             # Publish payload path
-            current_time = self.clock.now().to_msg()
-            self.payload_path.header.stamp = current_time
-            self.payload_path.header.frame_id = self.worldframe 
-            payload_rotmat = utilslib.QuatToRot(sol.y[:,0][6:10])
-            pl_pose_stamped = PoseStamped()
-            current_time = self.clock.now().to_msg()
-            pl_pose_stamped.header.stamp = current_time
-            pl_pose_stamped.header.frame_id = self.worldframe
-            pl_pose_stamped.pose = payload_odom.pose.pose 
-            self.payload_path.poses.append(pl_pose_stamped)
-            self.payload_path_publisher.publish(self.payload_path)
+            # current_time = self.clock.now().to_msg()
+            # self.payload_path.header.stamp = current_time
+            # self.payload_path.header.frame_id = self.worldframe 
+            # payload_rotmat = utilslib.QuatToRot(sol.y[:,0][6:10])
+            # pl_pose_stamped = PoseStamped()
+            # current_time = self.clock.now().to_msg()
+            # pl_pose_stamped.header.stamp = current_time
+            # pl_pose_stamped.header.frame_id = self.worldframe
+            # pl_pose_stamped.pose = payload_odom.pose.pose 
+            # self.payload_path.poses.append(pl_pose_stamped)
+            # self.payload_path_publisher.publish(self.payload_path)
+
+
             system_marker = MarkerArray()
             cable_point_list = np.zeros((2*self.nquad,3))
             for uav_id in range(self.nquad-1, -1, -1):
@@ -975,6 +979,10 @@ class simulation_base(Node):
         omega = s[10:13]
         qLdot = utilslib.quat_dot(quat,omega) 
 
+        # print("printing dynamic model of a payload")
+        # print("C :",C)
+        # print("D", D)
+        # print("E", E)
         # Payload Angular acceleration
         effective_M = M - np.matmul(C, np.matmul(invML, F)) - np.cross(omega, np.matmul(self.pl_params.I, omega))
         effective_inertia = self.pl_params.I + np.matmul(C, np.matmul(invML, D)) - E
@@ -1629,7 +1637,8 @@ class simulation_base(Node):
     ##################                  Call backs                  ####################
     
     def ext_wrench_callback(self, wrench_command):
-        self.get_logger().info(wrench_command.force.x)
+        # self.get_logger().info(wrench_command.force.x)
+        self.get_logger().info(f"Wrench force x: {wrench_command.force.x}")
         #print(wrench_command.force.x)
         self.ext_force = np.array([wrench_command.force.x, wrench_command.force.y, wrench_command.force.z])
         self.ext_torque= np.array([wrench_command.torque.x, wrench_command.torque.y, wrench_command.torque.z])
@@ -1651,6 +1660,7 @@ class simulation_base(Node):
               self.uav_M[2,0] = fm_command.moments.z
           elif self.pl_params.mechanism_type == 'Cable':
               if self.pl_params.payload_type == 'Rigid Body':
+                  #print("uav thrust: ", fm_command.thrust)
                   self.uav_F[uav_id] = fm_command.thrust
                   self.uav_M[0,uav_id] = fm_command.moments.x
                   self.uav_M[1,uav_id] = fm_command.moments.y

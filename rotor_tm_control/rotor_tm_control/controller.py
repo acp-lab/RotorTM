@@ -9,6 +9,7 @@ from rotor_tm_utils import utilslib
 import scipy
 from scipy.spatial.transform import Rotation as tranrot
 import json
+from scipy.linalg import null_space
 
 class controller:
     def __init__(self):
@@ -66,6 +67,7 @@ class controller:
         rot = qd[qn]["rot"]
 
         # Cable Direction Tracking Control
+        #print(qd[qn]["mu_des"])
         mu_des = qd[qn]["mu_des"]
         xi_des = np.divide(-mu_des, np.linalg.norm(mu_des))
         xi_des_dot = np.array([[0.0],[0.0],[0.0]])
@@ -75,18 +77,12 @@ class controller:
         mu = np.matmul(qd[qn]["xixiT"], mu_des)
         e_xi = np.cross(xi_des, xi, axisa=0, axisb=0).T
         e_w = w + np.cross(xi, np.cross(xi, w_des, axisa=0, axisb=0).T, axisa=0, axisb=0).T
-
+      
         u_parallel = mu + m*l*np.linalg.norm(w)**2*xi + np.matmul(m*qd[qn]["xixiT"], qd[qn]["attach_accel"])
         u_perpendicular = -m*l*np.cross(xi, params.Kxi @ e_xi + params.Kw @ e_w + (xi.T @ w_des) * xi_des_dot, axisa=0, axisb=0).T - m*np.cross(xi, np.cross(xi, qd[qn]["attach_accel"], axisa=0, axisb=0).T, axisa=0, axisb=0).T
         Force = u_parallel + u_perpendicular
-        # print("U_para")
-        # print(u_parallel)
-        # print("U_perpend") 
-        # print(u_perpendicular)
-        # print("CP-3")
-        # print(Force.T)
         F = Force.T @ np.matmul(rot,e3)
-
+        
         # Desired Attitude and Angular Velocity
         yaw_des = qd[qn]["yaw_des"]
         yawdot_des = qd[qn]["yawdot_des"]
@@ -109,7 +105,6 @@ class controller:
 
         # Quadrotor Attitude Control
         M = self.quadrotor_attitude_controller(qd[qn], params)
-
         return F, M, Rot_des
 
     def quadrotor_attitude_controller(self, qd, params):
@@ -150,7 +145,6 @@ class controller:
 
         e_omega = qd["omega"] - np.matmul(Rot.T, np.matmul(Rot_des, omega_des))
         M = np.cross(qd["omega"], np.matmul(params.I, qd["omega"]), axisa=0, axisb=0).T - np.matmul(params.Kpe, e_angle) - np.matmul(params.Kde, e_omega) 
-
         return M
 
     def cooperative_suspended_payload_controller(self, ql, qd, pl_params, qd_params, uav_id):
@@ -308,6 +302,147 @@ class controller:
 
         return mu, att_acc_c, qd_F, qd_M, qd_quat_des, qd_rot_des
 
+
+    def cooperative_suspended_payload_nmpc_controller(self, ql, qd, pl_params, qd_params, uav_id, Force, Moment, Null_vec):
+        # DESCRIPTION:
+        # Controller for cooperative cable suspended payload and MAV(s) 
+
+        # INPUTS:
+        # ql          - a dictionary containing state of the payload, specifically
+        #               Key             Type            Size            Description              
+        #               'pos'           ndarray         3 by 1          payload position
+        #               'vel'           ndarray         3 by 1          payload velocity
+        #               'quat'          ndarray         4 by 1          payload orientation as unit quaternion
+        #               'omega'         ndarray         3 by 1          payload angular velocity
+        #               'rot'           ndarray         3 by 3          payload rotation as rotation matrix
+        #               'pos_des'       ndarray         3 by 1          desired payload position
+        #               'vel_des'       ndarray         3 by 1          desired payload velocity
+        #               'acc_des'       ndarray         3 by 1          desired payload acceleration
+        #               'jrk_des'       ndarray         3 by 1          desired payload jerk
+        #               'quat_des'      ndarray         4 by 1          desired payload orientation as unit quaterion
+        #                                                               set to [[1.], [0.], [0.], [0.]] currently
+        #               'omega_des'     ndarray         3 by 1          desired payload angular velocity
+        #                                                               set to [[0., 0., 0.]] currently
+        #               'yaw_des'       float           NA              desired payload yaw, set to 0.0 current
+        #               'yawdot_des'    float           NA              time derivative of desired payload yaw, set to 0.0 currently
+        # qd          - a list of dictionary containing states of all MAV(s)
+        #               qd[0] would give a dictionary of MAV 0's states and related information, specifically
+        #               Key             Type            Size            Description              
+        #               'pos'           ndarray         3 by 1          MAV 0's position
+        #               'vel'           ndarray         3 by 1          MAV 0's velocity
+        #               'quat'          ndarray         4 by 1          MAV 0's orientation as unit quaternion
+        #               'omega'         ndarray         3 by 1          MAV 0's angular velocity
+        #               'rot'           ndarray         3 by 3          MAV 0's rotation as rotation matrix
+        #               'xi'            ndarray         3 by 1          MAV 0's cable direction as a unit vector
+        #               'xixiT'         ndarray         3 by 3          xi dot product with xi
+        #               'xidot'         ndarray         3 by 1          MAV 0's velocity normalized over separation distance
+        #               'yaw_des'       float           NA              desired payload yaw, set to 0.0 current
+        #               'yawdot_des'    float           NA              time derivative of desired payload yaw, set to 0.0 currently
+        #               'mu_des'        ndarray         3 by 1          desired cable tension of the cable suspended under MAV 0
+        #               'attach_accel'  ndarray         3 by 1          acceleration of the cable attach point
+        #               'rot_des'       ndarray         3 by 3          desired rotation as a rotation matrix
+        #               'omega_des'     ndarray         3 by 1          desired payload angular velocity
+        #                                                               set to [[0., 0., 0.]] currently
+        # pl_params   - a read_params class object containing payload parameters
+        # qd_params   - a read_params class objects containing all MAV parameters
+        # uav_id      - the id of the current node
+
+        # OUTPUTS:
+        # mu              - a 3*(Number of MAV(s)) by 1 ndarray, describing tension condition of each cable  
+        # att_acc_c       - a 2*(Number of MAV(s)) by 1 ndarray, describing cable payload attachment acceleration 
+        # qd_F            - a dictionary with (Number of MAV(s)) fields, with key '0', '1', '2', etc. 
+        #                   Each dictionary contains a 1 by 1 ndarray denoting the thrust
+        # qd_M            - a dictionary with (Number of MAV(s)) fields, with key '0', '1', '2', etc. 
+        #                   Each dictionary contains a 3 by 1 ndarray denoting the moment
+        # qd_quat_des     - a dictionary with (Number of MAV(s)) fields, with key '0', '1', '2', etc. 
+        #                   Each dictionary contains a 1d ndarray with 4 elements denoting the desired orientation as unit quaternion
+        # qd_rot_des      - a dictionary with (Number of MAV(s)) fields, with key '0', '1', '2', etc. 
+        #                   Each dictionary contains a 3 by 3 ndarray denoting the desired orientation as rotation matrix
+
+        if not pl_params.sim_start:
+            self.icnt = 0
+        self.icnt = self.icnt + 1
+        g = pl_params.grav
+        nquad = pl_params.nquad
+
+        e3 = np.array([[0],[0],[1.0]])
+
+        Rot = ql["rot"]
+        omega_asym = vec2asym(ql["omega"])
+        pl_omega = ql["omega"]
+
+        omeega_dt = vec2asym(ql["omega"])
+           
+        F = Force
+        M = Moment
+        N_mat = null_space(pl_params.P) #Null_space_mat
+        W = np.append(F,M)
+        acceleration_des = ql["acc_des"] 
+        
+        # Cable tension distribution
+        diag_rot = np.zeros((0,0), dtype=float)
+        for i in range(1, nquad+1):
+            diag_rot = LA.block_diag(diag_rot, Rot)
+        pl_F = F
+        pl_M = M
+
+        #will be included with constraints 
+        #mu = diag_rot @ ( pl_params.pseudo_inv_P @ np.append(Rot.T @ F, M, axis=0) - N_mat @ Null_vec )
+        mu = diag_rot @ ( pl_params.pseudo_inv_P @ np.append(Rot.T @ F, M, axis=0))
+        
+        #print("force:")
+        #print("   x: " + str(np.around(mu[2,0], 10)))
+        #print("   y: " + str(np.around(mu[5,0], 10)))
+        #print("   z: " + str(np.around(mu[8,0], 10)))
+        #print("---")
+        
+        for i in range(1, nquad+1):
+            if (0>mu[3*i-1]):
+                mu[3*i-1] = 0 
+                print("mu is less than zero")
+            
+        Rho_mat = []
+        for j in range(nquad):
+            Rho_mat.append(self.skew_mat(pl_params.rho_vec_list[:, j]))             
+        Rho_mat = LA.block_diag(*Rho_mat) #np.vstack(Rho_mat)
+        mat_mid = np.matmul(Rho_mat, omeega_dt.flatten(order='F'))
+        mat_mid = mat_mid.reshape((3,3),order='F')
+        
+
+        att_acc_c = acceleration_des + g*e3 + np.matmul(np.matmul(np.matmul(Rot, omega_asym), omega_asym), pl_params.rho_vec_list) # - np.matmul(Rot, mat_mid  )
+        
+        # Quadrotor Attitude Controller
+        qd_F = {}
+        qd_M = {}
+        qd_rot_des = {}
+        qd_quat_des = {}
+
+        qd[uav_id]["yaw_des"] = 0.
+        qd[uav_id]["yawdot_des"] = 0.
+        qd[uav_id]["mu_des"] = mu[3*uav_id:3*(uav_id+1)].reshape(3,1)
+        qd[uav_id]["attach_accel"] = att_acc_c[:,uav_id].reshape((3,1))
+        [F_qn, M_qn, Rot_des_qn] = self.cooperative_attitude_controller(qd, uav_id, qd_params[uav_id])
+        
+        qd_F[uav_id] = F_qn
+        qd_M[uav_id] = M_qn
+        qd_quat_des[uav_id] = tranrot.from_matrix(Rot_des_qn).as_quat() 
+        qd_rot_des[uav_id] = Rot_des_qn 
+
+        #for qn in range(0, nquad):
+        #    qd[qn]["yaw_des"] = 0
+        #    qd[qn]["yawdot_des"] = 0
+        #    qd[qn]["mu_des"] = mu[3*qn:3*(qn+1)]
+        #    qd[qn]["attach_accel"] = att_acc_c[:,qn].reshape((3,1))
+        #    [F_qn, M_qn, Rot_des_qn] = self.cooperative_attitude_controller(qd, qn, qd_params[qn])
+        #    qd_F[qn] = F_qn
+        #    qd_M[qn] = M_qn
+        #    qd_quat_des[qn] = tranrot.from_matrix(Rot_des_qn).as_quat() 
+        #    qd_rot_des[qn] = Rot_des_qn 
+    
+        #return qd_F, qd_M
+        return mu, att_acc_c, qd_F, qd_M, qd_quat_des, qd_rot_des
+
+
     # untested
     def cooperative_payload_controller(self, ql, params):
         if not params["sim_start"]:
@@ -324,7 +459,6 @@ class controller:
         m = params.mass
 
         e3 = np.array([[0],[0],[1]])
-
         Rot = ql["rot"]
         omega_asym = vec2asym(ql["omega"])
         Rot_des = utilslib.QuatToRot(quat_des)
@@ -719,3 +853,8 @@ class controller:
         # print("")
         # print(M)
         return F, M
+
+    def skew_mat(self, v):
+        return np.array([[0, -v[2], v[1]],
+                     [v[2], 0, -v[0]],
+                     [-v[1], v[0], 0]])

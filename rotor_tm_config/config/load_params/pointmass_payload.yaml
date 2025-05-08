@@ -4,3 +4,5 @@ inertia:
 
 # path to payload mesh
 mesh_path: ""
+grav: 9.81
+

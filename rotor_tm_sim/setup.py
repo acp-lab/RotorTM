@@ -1,7 +1,6 @@
 from setuptools import find_packages, setup
 import os
 from glob import glob
-
 package_name = 'rotor_tm_sim'
 
 def package_data_files(source, destination):
@@ -33,7 +32,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'sim_node = rotor_tm_sim.runsim:main'
+            'sim_node = rotor_tm_sim.runsim:main',
+            'data_saver_node = rotor_tm_sim.data_saver_node:main'
 
         ],
     },

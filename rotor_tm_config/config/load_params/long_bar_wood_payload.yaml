@@ -4,3 +4,4 @@ inertia: {Ixx: 0.004053, Ixy: 0.0, Ixz: 0.0, Iyx: 0.0, Iyy: 0.000013225, Iyz: 0.
 
 # path to payload mesh
 mesh_path: "package://rotor_tm_sim/mesh/long_bar.STL"
+grav: 9.81 

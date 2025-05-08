@@ -29,6 +29,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CenPLCommand.msg"
   "msg/StatusData.msg"
   "msg/TRPYCommand.msg"
+  "msg/TrajCommand.msg" 
+  "msg/FMNCommand.msg"
   
   "srv/Vec4.srv"
   "srv/Circle.srv"
@@ -39,7 +41,6 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   
   DEPENDENCIES geometry_msgs std_msgs nav_msgs sensor_msgs
 )
-
 
 
 if(BUILD_TESTING)
