@@ -15,7 +15,7 @@ nmpc_filename=$(yq e '.config_paths.nmpc_filename' $config_file)
 
 cd ../..
 cd rotor_tm_plcontrol
-source ~/acados/mpcenv/bin/activate 
+source ~/acados_env/bin/activate 
 
 cd scripts
 python3 payload_controller.py $payload_params_path $uav_params_path $mechanism_params_path $payload_control_gain_path $uav_control_gain_path $nmpc_filename
@@ -24,7 +24,7 @@ cd ..
 cp scripts/c_generated_code/payload_model_model/payload_model_model.h include/rotor_tm_plcontrol
 cp scripts/c_generated_code/acados_solver_payload_model.h include/rotor_tm_plcontrol
 
-cd ../../.. 
+cd ../
 colcon build --packages-select rotor_tm_plcontrol
 source install/setup.bash 
 
