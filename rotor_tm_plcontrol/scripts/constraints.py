@@ -1,4 +1,4 @@
-from rotor_tm_utils import utilslib 
+# from rotor_tm_utils import utilslib 
 import casadi as ca
 from scipy.linalg import null_space
 from utils import QuatToRot

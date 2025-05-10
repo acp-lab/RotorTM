@@ -4,8 +4,9 @@ import numpy as np
 import ipdb
 import yaml
 from acados_template import AcadosModel
-from rotor_tm_utils import read_params
-from rotor_tm_utils import utilslib
+# from rotor_tm_utils import read_params
+import read_params
+# from rotor_tm_utils import utilslib
 
 
 def CaQuatToRot(q):

@@ -2,12 +2,15 @@ from acados_template import AcadosOcp, AcadosOcpSolver, AcadosSimSolver
 import casadi as ca
 import numpy as np
 from payload_model import payload_model
-from rotor_tm_utils import QuatToYPR
-from rotor_tm_utils import read_params
+# from rotor_tm_utils import QuatToYPR
+########################################
+# from rotor_tm_utils import read_params
+import read_params
+########################################
 import sys
 from cost_functions import cal_square_cost, calc_quat_cost
-import ipdb
-from constraints import get_constraints
+# import ipdb
+# from constraints import get_constraints
 import sys
 from ament_index_python.packages import get_package_share_directory 
 import os
@@ -32,10 +35,10 @@ def controller_setup(control_params,  payload_params):
     ocp.model = model
     ocp.dims.np = ocp.model.p.size()[0]
     ocp.parameter_values = np.zeros(ocp.dims.np)
-    nx = model.x.rows()
-    nu = model.u.rows()
-    ny = nx + nu
-    unscale = N/Tf 
+    # nx = model.x.rows()
+    # nu = model.u.rows()
+    # ny = nx + nu
+    # unscale = N/Tf 
 
     ##cost functions and references
     #turing matrices Q, R and Qe
