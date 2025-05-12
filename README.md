@@ -85,8 +85,8 @@ Clone the repo and `colcon build` the ROS workspace. Source the `setup.bash` fil
 
 ```bash
 $ cd /path/to/your/workspace/src
-$ git clone --branch Python/ROS https://github.com/arplaboratory/RotorTM.git
-$ cd RotorTM
+$ git clone git@github.com:acp-lab/RotorTM.git
+$ git clone git@github.com:acp-lab/Payload-NMPC.git
 $ colcon build
 $ source install/setup.bash 
 
