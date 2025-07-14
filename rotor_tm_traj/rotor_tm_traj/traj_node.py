@@ -7,7 +7,7 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 import numpy as np
 from rotor_tm_traj import map
 from rotor_tm_traj import create_options
-from matplotlib import pyplot as plt
+# from matplotlib import pyplot as plt
 
 # ROS 2 message and service imports
 from rotor_tm_msgs.msg import PositionCommand
